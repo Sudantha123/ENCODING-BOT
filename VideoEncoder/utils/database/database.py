@@ -1,14 +1,34 @@
-
-
 import datetime
+import logging
 
 import motor.motor_asyncio
+from pymongo.errors import PyMongoError
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Database:
-
     def __init__(self, uri, database_name):
-        self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
+        # Environment values often get copied with trailing newlines/spaces.
+        # Strip them before passing the URI to PyMongo/Motor.
+        uri = (uri or "").strip()
+        database_name = (database_name or "").strip()
+
+        if not uri:
+            raise ValueError("MONGO_URI is missing or empty")
+        if not database_name:
+            raise ValueError("SESSION_NAME must contain a MongoDB database name")
+
+        # Remove any accidental line breaks from the connection string.
+        uri = "".join(uri.splitlines()).strip()
+
+        self._client = motor.motor_asyncio.AsyncIOMotorClient(
+            uri,
+            serverSelectionTimeoutMS=15000,
+            connectTimeoutMS=15000,
+            retryWrites=True,
+            w="majority",
+        )
         self.db = self._client[database_name]
         self.col = self.db.users
         self.col2 = self.db.status
@@ -45,21 +65,21 @@ class Database:
         )
 
     async def add_user(self, id):
-        if not await self.is_user_exist(id):
-            user = self.new_user(id)
-            await self.col.insert_one(user)
+        await self.col.update_one(
+            {'id': int(id)},
+            {'$setOnInsert': self.new_user(int(id))},
+            upsert=True
+        )
 
     async def is_user_exist(self, id):
-        user = await self.col.find_one({'id': int(id)})
-        return True if user else False
+        user = await self.col.find_one({'id': int(id)}, {'_id': 1})
+        return user is not None
 
     async def total_users_count(self):
-        count = await self.col.count_documents({})
-        return count
+        return await self.col.count_documents({})
 
     async def get_all_users(self):
-        all_users = self.col.find({})
-        return all_users
+        return self.col.find({})
 
     async def delete_user(self, user_id):
         await self.col.delete_many({'id': int(user_id)})
@@ -72,8 +92,6 @@ class Database:
         return user
 
     # Telegram Related
-
-    # Upload As Doc
     async def set_upload_as_doc(self, id, upload_as_doc):
         await self.col.update_one({'id': id}, {'$set': {'upload_as_doc': upload_as_doc}}, upsert=True)
 
@@ -82,8 +100,6 @@ class Database:
         return user.get('upload_as_doc', False)
 
     # Encoding Settings
-
-    # Resize
     async def set_resize(self, id, resize):
         await self.col.update_one({'id': id}, {'$set': {'resize': resize}}, upsert=True)
 
@@ -91,7 +107,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('resize', 'resize')
 
-    # Frame
     async def set_frame(self, id, frame):
         await self.col.update_one({'id': id}, {'$set': {'frame': frame}}, upsert=True)
 
@@ -99,7 +114,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('frame', 'source')
 
-    # Convert To 720p
     async def set_resolution(self, id, resolution):
         await self.col.update_one({'id': id}, {'$set': {'resolution': resolution}}, upsert=True)
 
@@ -107,7 +121,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('resolution', 'OG')
 
-    # Video Bits
     async def set_bits(self, id, bits):
         await self.col.update_one({'id': id}, {'$set': {'bits': bits}}, upsert=True)
 
@@ -115,7 +128,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('bits', False)
 
-    # Copy Subtitles
     async def set_subtitles(self, id, subtitles):
         await self.col.update_one({'id': id}, {'$set': {'subtitles': subtitles}}, upsert=True)
 
@@ -123,7 +135,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('subtitles', False)
 
-    # Sample rate
     async def set_samplerate(self, id, sample):
         await self.col.update_one({'id': id}, {'$set': {'sample': sample}}, upsert=True)
 
@@ -131,7 +142,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('sample', '44.1K')
 
-    # Extensions
     async def set_extensions(self, id, extensions):
         await self.col.update_one({'id': id}, {'$set': {'extensions': extensions}}, upsert=True)
 
@@ -139,7 +149,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('extensions', 'MP4')
 
-    # Bit rate
     async def set_bitrate(self, id, bitrate):
         await self.col.update_one({'id': id}, {'$set': {'bitrate': bitrate}}, upsert=True)
 
@@ -147,7 +156,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('bitrate', '128')
 
-    # Reframe
     async def set_reframe(self, id, reframe):
         await self.col.update_one({'id': id}, {'$set': {'reframe': reframe}}, upsert=True)
 
@@ -155,7 +163,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('reframe', 'pass')
 
-    # Audio Codec
     async def set_audio(self, id, audio):
         await self.col.update_one({'id': id}, {'$set': {'audio': audio}}, upsert=True)
 
@@ -163,7 +170,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('audio', 'dd')
 
-    # Audio Channels
     async def set_channels(self, id, channels):
         await self.col.update_one({'id': id}, {'$set': {'channels': channels}}, upsert=True)
 
@@ -171,7 +177,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('channels', 'source')
 
-    # Metadata Watermark
     async def set_metadata_w(self, id, metadata):
         await self.col.update_one({'id': id}, {'$set': {'metadata': metadata}}, upsert=True)
 
@@ -179,7 +184,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('metadata', False)
 
-    # Watermark
     async def set_watermark(self, id, watermark):
         await self.col.update_one({'id': id}, {'$set': {'watermark': watermark}}, upsert=True)
 
@@ -187,7 +191,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('watermark', False)
 
-    # Motion Watermark
     async def set_motion_watermark(self, id, motion):
         await self.col.update_one({'id': id}, {'$set': {'motion_watermark': motion}}, upsert=True)
 
@@ -195,7 +198,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('motion_watermark', False)
 
-    # Motion Opacity
     async def set_motion_opacity(self, id, opacity):
         await self.col.update_one({'id': id}, {'$set': {'motion_opacity': opacity}}, upsert=True)
 
@@ -203,7 +205,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('motion_opacity', '50')
 
-    # Preset
     async def set_preset(self, id, preset):
         await self.col.update_one({'id': id}, {'$set': {'preset': preset}}, upsert=True)
 
@@ -211,7 +212,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('preset', 'sf')
 
-    # Hard Sub
     async def set_hardsub(self, id, hardsub):
         await self.col.update_one({'id': id}, {'$set': {'hardsub': hardsub}}, upsert=True)
 
@@ -219,7 +219,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('hardsub', False)
 
-    # HEVC
     async def set_hevc(self, id, hevc):
         await self.col.update_one({'id': id}, {'$set': {'hevc': hevc}}, upsert=True)
 
@@ -227,7 +226,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('hevc', False)
 
-    # Tune
     async def set_tune(self, id, tune):
         await self.col.update_one({'id': id}, {'$set': {'tune': tune}}, upsert=True)
 
@@ -235,7 +233,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('tune', False)
 
-    # CABAC
     async def set_cabac(self, id, cabac):
         await self.col.update_one({'id': id}, {'$set': {'cabac': cabac}}, upsert=True)
 
@@ -243,7 +240,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('cabac', False)
 
-    # Aspect ratio
     async def set_aspect(self, id, aspect):
         await self.col.update_one({'id': id}, {'$set': {'aspect': aspect}}, upsert=True)
 
@@ -251,7 +247,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('aspect', False)
 
-    # Google Drive
     async def set_drive(self, id, drive):
         await self.col.update_one({'id': id}, {'$set': {'drive': drive}}, upsert=True)
 
@@ -259,7 +254,6 @@ class Database:
         user = await self._get_user(id)
         return user.get('drive', False)
 
-    # CRF
     async def get_crf(self, id):
         user = await self._get_user(id)
         return user.get('crf', 18)
@@ -271,10 +265,13 @@ class Database:
     async def get_killed_status(self):
         status = await self.col2.find_one({'id': 'killed'})
         if not status:
-            await self.col2.insert_one({'id': 'killed', 'status': False})
-            return False
-        else:
-            return status.get('status')
+            await self.col2.update_one(
+                {'id': 'killed'},
+                {'$setOnInsert': {'id': 'killed', 'status': False}},
+                upsert=True
+            )
+            status = await self.col2.find_one({'id': 'killed'})
+        return status.get('status', False)
 
     async def set_killed_status(self, status):
         await self.col2.update_one({'id': 'killed'}, {'$set': {'status': status}}, upsert=True)
@@ -283,10 +280,13 @@ class Database:
     async def get_chat(self):
         status = await self.col2.find_one({'id': 'auth'})
         if not status:
-            await self.col2.insert_one({'id': 'auth', 'chat': '5217257368'})
-            return '5217257368'
-        else:
-            return status.get('chat')
+            await self.col2.update_one(
+                {'id': 'auth'},
+                {'$setOnInsert': {'id': 'auth', 'chat': '5217257368'}},
+                upsert=True
+            )
+            status = await self.col2.find_one({'id': 'auth'})
+        return status.get('chat', '5217257368')
 
     async def set_chat(self, chat):
         await self.col2.update_one({'id': 'auth'}, {'$set': {'chat': chat}}, upsert=True)
@@ -295,15 +295,17 @@ class Database:
     async def get_sudo(self):
         status = await self.col2.find_one({'id': 'sudo'})
         if not status:
-            await self.col2.insert_one({'id': 'sudo', 'sudo_': '5217257368'})
-            return '5217257368'
-        else:
-            return status.get('sudo_')
+            await self.col2.update_one(
+                {'id': 'sudo'},
+                {'$setOnInsert': {'id': 'sudo', 'sudo_': '5217257368'}},
+                upsert=True
+            )
+            status = await self.col2.find_one({'id': 'sudo'})
+        return status.get('sudo_', '5217257368')
 
     async def set_sudo(self, sudo):
         await self.col2.update_one({'id': 'sudo'}, {'$set': {'sudo_': sudo}}, upsert=True)
 
-    # Thumbnail
     async def set_thumbnail(self, id, thumbnail):
         await self.col.update_one({'id': id}, {'$set': {'thumbnail': thumbnail}}, upsert=True)
 
