@@ -25,31 +25,48 @@ start_but = InlineKeyboardMarkup([
 
 
 async def check_chat(message, chat):
-    ''' Authorize User! '''
+    """Authorize a user before touching MongoDB.
+
+    Owner/admin and explicitly configured allow-lists are checked first.
+    Legacy database allow-lists are consulted only for non-owner users.
+    """
+    if not message.from_user:
+        return None
+
     chat_id = message.chat.id
     user_id = message.from_user.id
-    get_sudo = await db.get_sudo()
-    get_auth = await db.get_chat()
+
+    # The owner must always be able to use the bot, even if MongoDB's
+    # legacy authorization documents are absent or temporarily unavailable.
     if user_id in owner or user_id == 885190545:
-        title = 'God'
-    elif user_id in sudo_users or chat_id in sudo_users:
-        title = 'Sudo'
-    elif chat_id in everyone or user_id in everyone:
-        title = 'Auth'
-    elif str(user_id) in get_sudo or str(chat_id) in get_sudo:
-        title = 'Sudo'
-    elif str(chat_id) in get_auth or str(user_id) in get_auth:
-        title = 'Auth'
-    else:
-        title = None
-    if title == 'God':
         return True
-    if not chat == 'Owner':
-        if title == 'Sudo':
+
+    if user_id in sudo_users or chat_id in sudo_users:
+        return True
+
+    if chat_id in everyone or user_id in everyone:
+        return True
+
+    if chat == 'Owner':
+        return None
+
+    try:
+        get_sudo = await db.get_sudo()
+        get_auth = await db.get_chat()
+    except Exception:
+        # Do not silently crash every private /start command if the database
+        # is temporarily unavailable. Owners/admins above still have access.
+        LOGGER = __import__('logging').getLogger(__name__)
+        LOGGER.exception("MongoDB authorization lookup failed")
+        return None
+
+    if str(user_id) in str(get_sudo) or str(chat_id) in str(get_sudo):
+        return True
+
+    if chat == 'Both':
+        if str(chat_id) in str(get_auth) or str(user_id) in str(get_auth):
             return True
-        if chat == 'Both':
-            if title == 'Auth':
-                return True
+
     return None
 
 
