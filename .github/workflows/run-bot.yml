@@ -1,54 +1,118 @@
+
 name: Run Encoding Bot
 
 on:
   workflow_dispatch:
+
   schedule:
-    - cron: '0 */5 * * *'
+    - cron: '0 */6 * * *'
+
+concurrency:
+  group: encoding-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   run-bot:
+    name: Telegram Video Encoder Bot
     runs-on: ubuntu-latest
-    timeout-minutes: 320
+    timeout-minutes: 350
 
     steps:
-      - name: Checkout Code
+      # Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      # Setup Python
+      - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install System Dependencies
+      # Install FFmpeg
+      - name: Install FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg aria2 curl
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            mediainfo \
+            git \
+            wget \
+            pv
 
+          ffmpeg -version | head -n 1
+
+      # Install requirements
       - name: Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-          # PyMongo 4.9+ TypeError ගැටලුව මඟහැරීමට compatible versions install කිරීම
-          pip install "pymongo<4.9" "motor<3.6" --force-reinstall
+          python -m pip install --upgrade pip wheel
+          pip install --no-cache-dir -r requirements.txt
 
-      - name: Run Telegram Video Encoder Bot
+      # Validate configuration
+      - name: Validate Configuration
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
-          DATABASE_NAME: VideoEncoder
-          MONGO_DB_NAME: VideoEncoder
-          DB_NAME: VideoEncoder
           OWNER_ID: ${{ secrets.OWNER_ID }}
-          SUDO_USERS: ${{ secrets.SUDO_USERS || secrets.OWNER_ID }}
-          EVERYONE_CHATS: ${{ vars.EVERYONE_CHATS || secrets.OWNER_ID }}
-          LOG_CHANNEL: ${{ secrets.LOG_CHANNEL }}
-          DOWNLOAD_DIR: ./downloads
-          ENCODE_DIR: ./encode
         run: |
-          python3 -m VideoEncoder
-          
+          set -e
+
+          for key in API_ID API_HASH BOT_TOKEN MONGO_URI OWNER_ID; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing secret: $key"
+              exit 1
+            fi
+          done
+
+          echo "Configuration validation successful!"
+
+      # Start bot
+      - name: Run Telegram Video Encoder Bot
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+
+          # MongoDB
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          SESSION_NAME: ${{ secrets.SESSION_NAME || 'VideoEncoder' }}
+
+          # Telegram users
+          OWNER_ID: ${{ secrets.OWNER_ID }}
+          SUDO_USERS: ${{ secrets.SUDO_USERS || '' }}
+          EVERYONE_CHATS: ${{ secrets.EVERYONE_CHATS || '' }}
+          LOG_CHANNEL: ${{ secrets.LOG_CHANNEL }}
+
+          # Optional settings
+          DRIVE_DIR: ${{ secrets.DRIVE_DIR || '' }}
+          INDEX_URL: ${{ secrets.INDEX_URL || '' }}
+
+          # Working directories
+          DOWNLOAD_DIR: /tmp/videoencoder/downloads
+          ENCODE_DIR: /tmp/videoencoder/encodes
+
+        run: |
+          set -e
+
+          mkdir -p /tmp/videoencoder/downloads
+          mkdir -p /tmp/videoencoder/encodes
+
+          echo "===================================="
+          echo "      VIDEO ENCODER BOT"
+          echo "===================================="
+
+          echo "Python:"
+          python --version
+
+          echo "FFmpeg:"
+          ffmpeg -version | head -n 1
+
+          echo "Starting VideoEncoder..."
+
+          python -u -m VideoEncoder
