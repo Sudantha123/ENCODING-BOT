@@ -32,20 +32,34 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      - name: Run Telegram Video Encoder Bot
+      - name: Generate Config and Run Bot
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
-          DATABASE_NAME: ${{ vars.DATABASE_NAME || 'VideoEncoder' }}
-          MONGO_DB_NAME: ${{ vars.MONGO_DB_NAME || 'VideoEncoder' }}
-          DB_NAME: ${{ vars.DB_NAME || 'VideoEncoder' }}
           OWNER_ID: ${{ secrets.OWNER_ID }}
           SUDO_USERS: ${{ secrets.SUDO_USERS || secrets.OWNER_ID }}
           EVERYONE_CHATS: ${{ vars.EVERYONE_CHATS || secrets.OWNER_ID }}
           LOG_CHANNEL: ${{ secrets.LOG_CHANNEL }}
-          DOWNLOAD_DIR: ${{ vars.DOWNLOAD_DIR || './downloads' }}
-          ENCODE_DIR: ${{ vars.ENCODE_DIR || './encode' }}
+          DATABASE_NAME: VideoEncoder
+          MONGO_DB_NAME: VideoEncoder
+          DB_NAME: VideoEncoder
         run: |
+          cat <<EOF > config.env
+          API_ID=${API_ID}
+          API_HASH=${API_HASH}
+          BOT_TOKEN=${BOT_TOKEN}
+          MONGO_URI=${MONGO_URI}
+          DATABASE_NAME=VideoEncoder
+          MONGO_DB_NAME=VideoEncoder
+          DB_NAME=VideoEncoder
+          OWNER_ID=${OWNER_ID}
+          SUDO_USERS=${SUDO_USERS}
+          EVERYONE_CHATS=${EVERYONE_CHATS}
+          LOG_CHANNEL=${LOG_CHANNEL}
+          DOWNLOAD_DIR=./downloads
+          ENCODE_DIR=./encode
+          EOF
+
           python3 -m VideoEncoder
