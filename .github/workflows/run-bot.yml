@@ -3,13 +3,12 @@ name: Run Encoding Bot
 on:
   workflow_dispatch:
   schedule:
-    # සෑම පැය 5කට වරක්ම አලුත් workflow run එකක් ආරම්භ කරයි
     - cron: '0 */5 * * *'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 320 # මිනිත්තු 320කින් ක්‍රියාවලිය අවසන් කර ඊළඟ run එකට ඉඩ සලසයි
+    timeout-minutes: 320
 
     steps:
       - name: Checkout Code
@@ -39,10 +38,13 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
+          DATABASE_NAME: ${{ vars.DATABASE_NAME || 'VideoEncoder' }}
+          MONGO_DB_NAME: ${{ vars.MONGO_DB_NAME || 'VideoEncoder' }}
+          DB_NAME: ${{ vars.DB_NAME || 'VideoEncoder' }}
           OWNER_ID: ${{ secrets.OWNER_ID }}
-          SUDO_USERS: ${{ secrets.SUDO_USERS || '' }}
+          SUDO_USERS: ${{ secrets.SUDO_USERS || secrets.OWNER_ID }}
+          EVERYONE_CHATS: ${{ vars.EVERYONE_CHATS || secrets.OWNER_ID }}
           LOG_CHANNEL: ${{ secrets.LOG_CHANNEL }}
-          EVERYONE_CHATS: ${{ vars.EVERYONE_CHATS || '' }}
           DOWNLOAD_DIR: ${{ vars.DOWNLOAD_DIR || './downloads' }}
           ENCODE_DIR: ${{ vars.ENCODE_DIR || './encode' }}
         run: |
