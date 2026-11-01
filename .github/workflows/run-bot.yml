@@ -31,35 +31,24 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
+          # PyMongo 4.9+ TypeError ගැටලුව මඟහැරීමට compatible versions install කිරීම
+          pip install "pymongo<4.9" "motor<3.6" --force-reinstall
 
-      - name: Generate Config and Run Bot
+      - name: Run Telegram Video Encoder Bot
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
+          DATABASE_NAME: VideoEncoder
+          MONGO_DB_NAME: VideoEncoder
+          DB_NAME: VideoEncoder
           OWNER_ID: ${{ secrets.OWNER_ID }}
           SUDO_USERS: ${{ secrets.SUDO_USERS || secrets.OWNER_ID }}
           EVERYONE_CHATS: ${{ vars.EVERYONE_CHATS || secrets.OWNER_ID }}
           LOG_CHANNEL: ${{ secrets.LOG_CHANNEL }}
-          DATABASE_NAME: VideoEncoder
-          MONGO_DB_NAME: VideoEncoder
-          DB_NAME: VideoEncoder
+          DOWNLOAD_DIR: ./downloads
+          ENCODE_DIR: ./encode
         run: |
-          cat <<EOF > config.env
-          API_ID=${API_ID}
-          API_HASH=${API_HASH}
-          BOT_TOKEN=${BOT_TOKEN}
-          MONGO_URI=${MONGO_URI}
-          DATABASE_NAME=VideoEncoder
-          MONGO_DB_NAME=VideoEncoder
-          DB_NAME=VideoEncoder
-          OWNER_ID=${OWNER_ID}
-          SUDO_USERS=${SUDO_USERS}
-          EVERYONE_CHATS=${EVERYONE_CHATS}
-          LOG_CHANNEL=${LOG_CHANNEL}
-          DOWNLOAD_DIR=./downloads
-          ENCODE_DIR=./encode
-          EOF
-
           python3 -m VideoEncoder
+          
